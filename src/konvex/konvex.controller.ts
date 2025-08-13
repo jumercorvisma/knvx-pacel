@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body} from '@nestjs/common';
 import { KonvexService } from './konvex.service';
 
 
@@ -7,11 +7,6 @@ export class KonvexController {
   constructor(private readonly konvexService: KonvexService) {}
 
 
-  @Get('invoices')
-  findAllInvoices() {
-    return this.konvexService.findAllInvoices();
-  }
-
   @Get('entries')
   findAllEntriesD() {
     return this.konvexService.findAllEntries();
@@ -19,31 +14,14 @@ export class KonvexController {
 
   @Post('entries')
   createEntries(
-    @Body() data: { Memo: string, JournalEntryLines: { AccountCode: string; Credit: string; Debit: string; LineMemo: string, FCCurrency: string, FCCredit: string, FCDebit: string}[], U_NumDocAsociado?, U_IdInforme?, U_IdGasto?, TransactionCode? }
+    @Body() data: { Memo: string, JournalEntryLines: { AccountCode: string; Credit: string; Debit: string; LineMemo: string, FCCurrency: string, FCCredit: string, FCDebit: string}[], ProjectCode: string, Reference: string, Reference2: string }
 
   ) {
 
-    return this.konvexService.createEntry(data.Memo, data.JournalEntryLines, data.U_NumDocAsociado, data.U_IdInforme, data.U_IdGasto, data.TransactionCode);
+    return this.konvexService.createEntry(data.Reference, data.Memo, data.JournalEntryLines, data.ProjectCode, data.Reference2);
 
   }
 
-  @Get('vendors')
-  GetVendors(
-    @Query('rut') rut: string
-
-  ) {
-
-    return this.konvexService.findVendor(rut);
-
-  }
-
-
-
-
-
-
-
-
-
+ 
 
 }

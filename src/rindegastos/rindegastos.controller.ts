@@ -11,10 +11,7 @@ export class RindegastosController {
     return this.rindegastosService.findAll(dateSince, reportId);
   }
 
-  @Get('informes')
-  showInform(){
-    return this.rindegastosService.showInforms();
-  }
+
 
   @Get('entries') //toma los informes según la fecha desde/hasta, procesa el array para los timeEntries y los manda al servicio de konvex para que se creen 
   getEntries(
@@ -25,14 +22,6 @@ export class RindegastosController {
     return this.rindegastosService.arrangeEntries(dateSince, reportId);
   }
 
-  @Get('employees')
-  getEmployees(
-    @Query('id') employeeId: string
-  ){
-
-    return this.rindegastosService.FindEmployee(employeeId);
-
-  }
 
 
 }

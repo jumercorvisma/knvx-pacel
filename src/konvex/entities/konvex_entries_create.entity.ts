@@ -1,16 +1,17 @@
 export interface CreateEntries {
     Memo: string;
+    Reference: string;
     Reference1: string;
     Reference2: string;
     U_NumDocAsociado?: string;
     U_IdInforme?: string;
     U_IdGasto?: string;
-    TransactionCode?: string;
+    ProjectCode?: string;
     JournalEntryLines: JournalEntryLine[];
 }
 
 export interface JournalEntryLine {
-    AccountCode: string;
+    
     Debit:       string;
     Credit:      string;
     LineMemo:  string;
@@ -18,6 +19,9 @@ export interface JournalEntryLine {
     FCCredit:    string;
     FCDebit:     string;
     sap?:        Sap;
+    ShortName?: string;
+    AccountCode?: string;
+    CostingCode?: string
 }
 
 export interface Sap {
