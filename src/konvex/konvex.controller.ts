@@ -9,7 +9,7 @@ export class KonvexController {
 
   @Get('entries')
   findAllEntriesD() {
-    return this.konvexService.findAllEntries();
+    
   }
 
   @Post('entries')
@@ -18,7 +18,6 @@ export class KonvexController {
 
   ) {
 
-    return this.konvexService.createEntry(data.Reference, data.Memo, data.JournalEntryLines, data.ProjectCode, data.Reference2);
 
   }
 
