@@ -13,16 +13,14 @@ export class RindegastosService {
     @Inject(forwardRef(() => KonvexService)) private readonly konvexService: KonvexService,
   ) {}
 
-//Esta función es la principal, pues consulta los informes, gastos (con las dos funciones creadas para eso) 
-// y hace el arreglo para enviarlos como entradas diarías (asientos contables) a SAP
-  async arrangeEntries(dateSince: Date, reportId: string) {
-    console.log("hola")
+ async arrangeEntries(dateSince: Date, reportId: string) {
+  
     try{
  
     let informesConsultados: ExpenseReport[] = await this.findAll(dateSince, reportId);
     var report = informesConsultados;
-    console.log(report['ExpenseReports']['ReportNumber'])
-    var expenses = await this.findExpenses(dateSince, reportId); // Obtener las líneas de gasto por ID del informe
+   
+    var expenses = await this.findExpenses(dateSince, reportId); 
 
     
     await this.functionPrincipales(expenses, report)
@@ -32,7 +30,6 @@ export class RindegastosService {
 
   return 'Sincronización finalizada' ;
 
-  //Si hay un error se captura para dejar el log en el historial del informe
     } catch (error:any){
 
       return error
@@ -40,7 +37,7 @@ export class RindegastosService {
     };
 }
 
-//Esta función busca en rindegastos los reportes por id
+
   async findAll(dateSince: Date, reportId: string): Promise<ExpenseReport[]> {
     console.log("entro a findall")
     await new Promise(resolve => setTimeout(resolve, 20000))
@@ -48,7 +45,6 @@ export class RindegastosService {
         const config: AxiosRequestConfig = {
           method: 'get',
           maxBodyLength: Infinity,
-          //Solo se consultan informes cerrados que no esten integrados
           url: 'https://api.rindegastos.com/v2/getExpenseReport?Id='+reportId,
           headers: {
             'Authorization': 'Bearer '+ process.env.RG_APIKEY,
@@ -69,7 +65,7 @@ export class RindegastosService {
 
 }
 
-//Esta función obtiene el detalle de los gastos asociados a los reportes consultados
+
   async findExpenses(dateSince: Date, reportID: string){
     console.log("entró a findExpenses")
     await new Promise(resolve => setTimeout(resolve, 20000))
@@ -102,61 +98,56 @@ export class RindegastosService {
 
 }
 
-//Esta función itera el arreglo de gastos y separa aquellos
-//en los que por el tipo de documento
+
 async functionPrincipales(expenses: any, report: any){
-  console.log("entró a functionPrincipales")
 
   try{
 
 
       for (var g of expenses['Expenses']) {
+
+            let snSAP = await this.transformarRut(g.ExtraFields.find(field => field.Name === "RUT Proveedor")?.Value)
+
+            
         
             
-            console.log(g)
-
+     
             await new Promise(resolve => setTimeout(resolve, 20000))
-
-            //Busca el tipo de documento asociado al gasto para diferenciar como contabilizarlo
 
             var tipoDoc = g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code;
             var category = g.Category;
-            console.log("tipo de documento es " + tipoDoc);
-            console.log("el tipo del tipo de doc es" + typeof(tipoDoc));
-
-            //Si no son FF, FEE o BH los creamos como facturas de proveedores
-            //cambiando la nomenclatura del proveedor y la descripción
-
+   
+     
             if (tipoDoc === 'H'){
 
-            console.log("Entró en el loop H")
+        
             let facturaProveedor: facturaProveedores[] = [];
               
             facturaProveedor.push(
               {
                 sap: {
-                  CardCode: g.ExtraFields.find(field => field.Name === "Proveedor SAP")?.Value,//"H20544736",
-                  DocDate: g.ExtraFields.find(field => field.Name === "Fecha de contabilización")?.Value,//"2025-10-31",
+                  CardCode: snSAP.resultadoH,
+                  DocDate: g.ExtraFields.find(field => field.Name === "Fecha de contabilización")?.Value,
                   DocType: "dDocument_Service",
-                  FolioPrefixString: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,//"H",
-                  FolioNumber: g.ExtraFields.find(field => field.Name === "Número de Documento")?.Value+"3",//"21012",
+                  FolioPrefixString: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,
+                  FolioNumber: g.ExtraFields.find(field => field.Name === "Número de Documento")?.Value,
                   Indicator: "97",
-                  Comments: g.Note + " Rendición N° "+ report['ExpenseReports']['ReportNumber'] + " Rendidor: " + report['ExpenseReports']['Employee']['Name'],
+                  Comments: "Rendición N° "+ report['ExpenseReports']['ReportNumber'] + " Rendidor: " + report['ExpenseReports']['Employee']['Name'],
                   DocumentLines: [
                     {
-                      ItemDescription: g.Note,//"Servicio Degustacion",
-                      AccountCode: g.CategoryCode,//"4-1-02-02-17",
-                      LineTotal: g.Total,//"70175",  
+                      ItemDescription: g.Note,
+                      AccountCode: g.CategoryCode,
+                      LineTotal: g.Total, 
                       TaxCode: "IVA_EXE",
                       WTLiable: "tYES", 
-                      CostingCode: g.ExtraFields.find(field => field.Name === "Área")?.Code,//"MARKETIN",
-                      CostingCode2: g.ExtraFields.find(field => field.Name === "Zona")?.Code//"SUR-CHI"
+                      CostingCode: g.ExtraFields.find(field => field.Name === "Área")?.Code,
+                      CostingCode2: g.ExtraFields.find(field => field.Name === "Zona")?.Code
                     }
                   ],
                   WithholdingTaxDataCollection: [
                     {
                       WTCode: "W1", 
-                      TaxableAmount: g.Total//"70175" 
+                      TaxableAmount: g.Total
                     }
                   ]
                 }
@@ -167,42 +158,39 @@ async functionPrincipales(expenses: any, report: any){
              }
 
 
-            //Si son FF, FEE o BH los creamos como facturas de proveedores
-            //cambiando la nomenclatura del proveedor y la descripción
-
             const documentosValidos = ['33'];
 
             if (documentosValidos.includes(tipoDoc) && category !== 'Combustible Viajes'){
 
-            console.log("Entró en el loop 33")
+           
             let facturaProveedor: facturaProveedores[] = [];
               
             facturaProveedor.push({
               sap: {
                 DocType: "dDocument_Service", 
-                FolioPrefixString: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,//"33",
-                FolioNumber: g.ExtraFields.find(field => field.Name === "Número de Documento")?.Value+"3",//"21046",
-                DocDate: g.ExtraFields.find(field => field.Name === "Fecha de contabilización")?.Value,//"2025-10-23T00:00:00Z",
-                CardCode: g.ExtraFields.find(field => field.Name === "Proveedor SAP")?.Value,//"P77481532",
-                CardName: g.Supplier,//"TECSF SOFTWARE SPA",
-                JournalMemo: g.Note,//"Ejemplo contabilización factura boleta electrónica 39",
-                DocTotal: g.Total,//"13150",
-                DocCurrency: g.Currency,//"CLP",
-                Comments: g.Note + " Rendición N° "+ report['ExpenseReports']['ReportNumber'] + " Rendidor: " + report['ExpenseReports']['Employee']['Name'],//"Ejemplo contabilización factura boleta electrónica 39",
-                Indicator: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,//"33",
-                FederalTaxID: g.ExtraFields.find(field => field.Name === "RUT Proveedor")?.Value,//"77481532-5",
+                FolioPrefixString: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,
+                FolioNumber: g.ExtraFields.find(field => field.Name === "Número de Documento")?.Value,
+                DocDate: g.ExtraFields.find(field => field.Name === "Fecha de contabilización")?.Value,
+                CardCode: snSAP.resultadoP,
+                CardName: g.Supplier,
+                JournalMemo: g.Note,
+                DocTotal: g.Total,
+                DocCurrency: g.Currency,
+                Comments: "Rendición N° "+ report['ExpenseReports']['ReportNumber'] + " Rendidor: " + report['ExpenseReports']['Employee']['Name'],
+                Indicator: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,
+                FederalTaxID: g.ExtraFields.find(field => field.Name === "RUT Proveedor")?.Value,
                 DocumentLines: [
                   {
-                    ItemDescription: g.Note,//"Ejemplo contabilización factura boleta electrónica 39",
+                    ItemDescription: g.Note,
                     Quantity: "1",
-                    PriceAfterVAT: g.Total,//"13150",
-                    Currency: g.Currency,//"CLP",
-                    AccountCode: g.CategoryCode,//"4-1-02-12-02", 
-                    CostingCode: g.ExtraFields.find(field => field.Name === "Área")?.Code,//"MARKETIN",
+                    PriceAfterVAT: g.Total,
+                    Currency: g.Currency,
+                    AccountCode: g.CategoryCode, 
+                    CostingCode: g.ExtraFields.find(field => field.Name === "Área")?.Code,
                     TaxCode: "IVA",
-                    FreeText: g.Note,//"Ejemplo contabilización factura boleta electrónica 39",
-                    Text: g.Note,//"Ejemplo contabilización factura boleta electrónica 39",
-                    CostingCode2: g.ExtraFields.find(field => field.Name === "Zona")?.Code//"SUR-CHI"
+                    FreeText: g.Note,
+                    Text: g.Note,
+                    CostingCode2: g.ExtraFields.find(field => field.Name === "Zona")?.Code
                   }
                 ]
               }
@@ -219,35 +207,33 @@ async functionPrincipales(expenses: any, report: any){
 
             if (documentosValidos2.includes(tipoDoc)){
 
-            console.log("Entró en el loop 34, 39, C")
             let facturaProveedor: facturaProveedores[] = [];
               
             facturaProveedor.push({
               sap: {
                 DocType: "dDocument_Service", 
-                FolioPrefixString: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,//"33",
-                FolioNumber: g.ExtraFields.find(field => field.Name === "Número de Documento")?.Value+"3",//"21046",
-                DocDate: g.ExtraFields.find(field => field.Name === "Fecha de contabilización")?.Value,//"2025-10-23T00:00:00Z",
-                CardCode: g.ExtraFields.find(field => field.Name === "Proveedor SAP")?.Value,//"P77481532",
-                CardName: g.Supplier,//"TECSF SOFTWARE SPA",
-                JournalMemo: g.Note,//"Ejemplo contabilización factura boleta electrónica 39",
-                DocTotal: g.Total,//"13150",
-                DocCurrency: g.Currency,//"CLP",
-                Comments: g.Note + " Rendición N° "+ report['ExpenseReports']['ReportNumber'] + " Rendidor: " + report['ExpenseReports']['Employee']['Name'],//"Ejemplo contabilización factura boleta electrónica 39",
-                Indicator: '33',//g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,//"33",
-                FederalTaxID: g.ExtraFields.find(field => field.Name === "RUT Proveedor")?.Value,//"77481532-5",
+                FolioPrefixString: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,
+                FolioNumber: g.ExtraFields.find(field => field.Name === "Número de Documento")?.Value,
+                DocDate: g.ExtraFields.find(field => field.Name === "Fecha de contabilización")?.Value,
+                CardCode: snSAP.resultadoP,
+                JournalMemo: g.Note,
+                DocTotal: g.Total,
+                DocCurrency: g.Currency,
+                Comments: "Rendición N° "+ report['ExpenseReports']['ReportNumber'] + " Rendidor: " + report['ExpenseReports']['Employee']['Name'],
+                Indicator: '33',
+                FederalTaxID: g.ExtraFields.find(field => field.Name === "RUT Proveedor")?.Value,
                 DocumentLines: [
                   {
-                    ItemDescription: g.Note,//"Ejemplo contabilización factura boleta electrónica 39",
+                    ItemDescription: g.Note,
                     Quantity: "1",
-                    PriceAfterVAT: g.Total,//"13150",
-                    Currency: g.Currency,//"CLP",
-                    AccountCode: g.CategoryCode,//"4-1-02-12-02", 
-                    CostingCode: g.ExtraFields.find(field => field.Name === "Área")?.Code,//"MARKETIN",
+                    PriceAfterVAT: g.Total,
+                    Currency: g.Currency,
+                    AccountCode: g.CategoryCode, 
+                    CostingCode: g.ExtraFields.find(field => field.Name === "Área")?.Code,
                     TaxCode: "IVA_EXE",
-                    FreeText: g.Note,//"Ejemplo contabilización factura boleta electrónica 39",
-                    Text: g.Note,//"Ejemplo contabilización factura boleta electrónica 39",
-                    CostingCode2: g.ExtraFields.find(field => field.Name === "Zona")?.Code//"SUR-CHI"
+                    FreeText: g.Note,
+                    Text: g.Note,
+                    CostingCode2: g.ExtraFields.find(field => field.Name === "Zona")?.Code
                   }
                 ]
               }
@@ -262,33 +248,33 @@ async functionPrincipales(expenses: any, report: any){
 
             if (tipoDoc === '33' && category ==='Combustible Viajes'){
 
-            console.log("Combustible Viajes")
+           
             let facturaProveedor: facturaProveedores[] = [];
               
             facturaProveedor.push({
               sap: {
-                CardCode: g.ExtraFields.find(field => field.Name === "Proveedor SAP")?.Value,//"P92011000",
-                DocDate: g.ExtraFields.find(field => field.Name === "Fecha de contabilización")?.Value,//"2025-06-16",
+                CardCode: snSAP.resultadoP,
+                DocDate: g.ExtraFields.find(field => field.Name === "Fecha de contabilización")?.Value,
                 DocType: "dDocument_Service", 
-                Comments: g.Note + " Rendición N° "+ report['ExpenseReports']['ReportNumber'] + " Rendidor: " + report['ExpenseReports']['Employee']['Name'],//"Carga de combustible con Impuesto Específico",
-                FolioPrefixString: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,//"33",
-                FolioNumber: g.ExtraFields.find(field => field.Name === "Número de Documento")?.Value+"3",//"210214",
-                Indicator: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,//"33",
-                FederalTaxID: g.ExtraFields.find(field => field.Name === "RUT Proveedor")?.Value,//"92011000-1",
+                Comments: "Rendición N° "+ report['ExpenseReports']['ReportNumber'] + " Rendidor: " + report['ExpenseReports']['Employee']['Name'],
+                FolioPrefixString: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,
+                FolioNumber: g.ExtraFields.find(field => field.Name === "Número de Documento")?.Value,
+                Indicator: g.ExtraFields.find(field => field.Name === "Tipo de Documento")?.Code,
+                FederalTaxID: g.ExtraFields.find(field => field.Name === "RUT Proveedor")?.Value,
                 DocumentLines: [        
                   {
                     LineNum: "0",
-                    ItemDescription: g.Note,//"198 Lts.combustible",
-                    AccountCode: g.CategoryCode,//"4-1-02-01-02",
-                    LineTotal: g.Net,//"6987",
+                    ItemDescription: g.Note,
+                    AccountCode: g.CategoryCode,
+                    LineTotal: g.Net,
                     TaxCode: "IVA",      
                     TaxOnly: "tNO"       
                   },
                   {
                     LineNum: "1",
-                    ItemDescription: g.Note,//"impuesto especifico",
-                    AccountCode: g.CategoryCode,//"4-1-02-01-02", 
-                    LineTotal: g.OtherTaxes,//"3685",     
+                    ItemDescription: g.Note,
+                    AccountCode: g.CategoryCode,
+                    LineTotal: g.OtherTaxes,     
                     TaxCode: "ESP.N.RE",  
                     TaxOnly: "tYES"
                   }
@@ -308,7 +294,7 @@ async functionPrincipales(expenses: any, report: any){
             }
           }
           catch (error: any ){
-            console.log(error)
+        
             return error
 
   }
@@ -316,9 +302,20 @@ async functionPrincipales(expenses: any, report: any){
       
 }
 
+async transformarRut(rutProveedor) {
+    // Nos aseguramos de que sea sin DV y solo números.
+    const soloNumeros = rutProveedor.replace(/[.-]/g, '').slice(0, -1);
 
+    
+    const resultadoP = `P${soloNumeros}`;
+    const resultadoH = `H${soloNumeros}`;
+
+    return {
+        resultadoP,
+        resultadoH
+    };
+}
 
 }
 
 
-//Pendientes
